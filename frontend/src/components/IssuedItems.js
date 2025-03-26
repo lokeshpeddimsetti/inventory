@@ -11,8 +11,8 @@ const IssuedItemsTable = () => {
     setLoading(true);
     try {
       const response = await axios.get("http://localhost:5000/issued_items");
-      setIssuedItemsData(response.data); // Assuming the backend returns issued items in `data`
-      console.log(issuedItemsData);
+      console.log("Issued Items Data:", response.data); // Log the data
+      setIssuedItemsData(response.data);
     } catch (error) {
       console.error("Error fetching issued items:", error);
       message.error("Failed to fetch issued items. Please try again later.");
@@ -27,6 +27,11 @@ const IssuedItemsTable = () => {
   // Columns for the issued items table
   const issuedItemsColumns = [
     {
+      title: "Issue ID",
+      dataIndex: "issue_id",
+      key: "issue_id",
+    },
+    {
       title: "Item",
       dataIndex: "item",
       key: "item",
@@ -37,11 +42,6 @@ const IssuedItemsTable = () => {
       key: "quantity",
     },
     {
-      title: "Issued To",
-      dataIndex: "issued_to",
-      key: "issued_to",
-    },
-    {
       title: "Issued By",
       dataIndex: "issued_by",
       key: "issued_by",
@@ -50,6 +50,42 @@ const IssuedItemsTable = () => {
       title: "Issue Date",
       dataIndex: "issue_date",
       key: "issue_date",
+    },
+    {
+      title: "Issued To",
+      dataIndex: "issued_to",
+      key: "issued_to",
+    },
+    {
+      title: "Item ID",
+      dataIndex: "item_id",
+      key: "item_id",
+    },
+    {
+      title: "Brand",
+      dataIndex: "brand",
+      key: "brand",
+    },
+    {
+      title: "Units",
+      dataIndex: "units",
+      key: "units",
+    },
+    {
+      title: "Unit Price",
+      dataIndex: "unit_price",
+      key: "unit_price",
+      render: (text) => `₹${text}`, // Format as currency
+    },
+    {
+      title: "Domain",
+      dataIndex: "domain",
+      key: "domain",
+    },
+    {
+      title: "Category Name",
+      dataIndex: "category_name",
+      key: "category_name",
     },
   ];
 

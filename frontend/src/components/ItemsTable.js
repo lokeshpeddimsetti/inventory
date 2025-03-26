@@ -26,44 +26,46 @@ const ItemsTable = ({ itemsData, setItemsData }) => {
       message.error("Please enter a valid quantity to issue.");
       return;
     }
-
+  
     if (issueQuantity > modalData.quantity) {
       message.error("Issued quantity cannot exceed available quantity.");
       return;
     }
-
+  
     if (!issuedTo.trim()) {
       message.error("Please specify the person to whom the item is issued.");
       return;
     }
-
+  
     if (!issuedBy.trim()) {
       message.error("Please specify the issuer name.");
       return;
     }
-
+  
+    const payload = {
+      item_id: modalData.id, // Use the item ID
+      item: modalData.name, // Item name
+      quantity: issueQuantity, // Quantity to issue
+      issued_by: issuedBy,
+      issue_date: new Date().toISOString().split("T")[0],
+      issued_to: issuedTo,
+      brand: modalData.brand,
+      units: modalData.units,
+      unit_price: modalData.unit_price,
+      domain: modalData.domain,
+      category_name: modalData.category_name,
+    };
+    console.log("Payload being sent to backend:", payload);
+  
     try {
-      // Log the payload for debugging
-      console.log({
-        item: modalData.name,
-        quantity: issueQuantity,
-        issued_by: issuedBy,
-        issue_date: new Date().toISOString().split("T")[0],
-        issued_to: issuedTo,
-      });
-
-      // Send the issued item data to the backend
-      const response = await axios.post("http://localhost:5000/issued-items", {
-        item: modalData.name,
-        quantity: issueQuantity,
-        issued_by: issuedBy,
-        issue_date: new Date().toISOString().split("T")[0],
-        issued_to: issuedTo,
-      });
-
+      const response = await axios.post("http://localhost:5000/issue", payload);
+  
       if (response.data.success) {
         message.success("Item issued successfully!");
-
+  
+        // Show an alert box after successful issuance
+        alert(`Item "${modalData.name}" has been issued successfully to "${issuedTo}".`);
+  
         // Update the quantity in the itemsData state
         setItemsData((prev) =>
           prev.map((item) =>
@@ -72,10 +74,10 @@ const ItemsTable = ({ itemsData, setItemsData }) => {
               : item
           )
         );
-
+  
         setIsModalVisible(false); // Close the modal
       } else {
-        message.error("Failed to issue item. Please try again.");
+        message.error(response.data.message || "Failed to issue item. Please try again.");
       }
     } catch (error) {
       console.error("Error issuing item:", error);

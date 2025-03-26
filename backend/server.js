@@ -231,47 +231,85 @@ app.put("/items/:id", async (req, res) => {
   });
 
   
-  app.post("/issued-items", (req, res) => {
-    const { item, quantity, issued_by, issue_date, issued_to } = req.body;
-    console.log("Issued Item:", req.body);
+  ///issue button
   
-    if (!item || !quantity || !issued_by || !issued_to || !issue_date) {
+  app.post("/issue", async (req, res) => {
+    const {
+      item_id,
+      item,
+      quantity,
+      issued_by,
+      issue_date,
+      issued_to,
+      brand,
+      units,
+      unit_price,
+      domain,
+      category_name,
+    } = req.body;
+  
+    console.log("Request Body:", req.body);
+  
+    if (
+      !item_id ||
+      !item ||
+      !quantity ||
+      !issued_by ||
+      !issue_date ||
+      !issued_to ||
+      !brand ||
+      !units ||
+      !unit_price ||
+      !domain ||
+      !category_name
+    ) {
       return res.status(400).json({ success: false, message: "Invalid data provided." });
     }
   
-    // Insert into issued_items table
-    const insertIssuedItemQuery = `
-      INSERT INTO issued_items (item, quantity, issued_by, issue_date, issued_to)
-      VALUES (?, ?, ?, ?, ?)
-    `;
-  console.log(insertIssuedItemQuery);
-    db.query(
-      insertIssuedItemQuery,
-      [item, quantity, issued_by, issue_date, issued_to],
-      (err, result) => {
-        if (err) {
-          console.error("Error inserting into issued_items table:", err);
-          return res.status(500).json({ success: false, message: "Database error." });
-        }
+    try {
+      // Insert into issued_items table
+      const insertIssuedItemQuery = `
+        INSERT INTO issued_items (
+          item_id, item, quantity, issued_by, issue_date, issued_to, brand, units, unit_price, domain, category_name
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      await db.query(insertIssuedItemQuery, [
+        item_id,
+        item,
+        quantity,
+        issued_by,
+        issue_date,
+        issued_to,
+        brand,
+        units,
+        unit_price,
+        domain,
+        category_name,
+      ]);
   
-        // Update the inventory table to reduce the quantity
-        const updateInventoryQuery = `
-          UPDATE inventory
-          SET quantity = quantity - ?
-          WHERE name = ?
-        `;
+      // Update the items table to reduce the quantity
+      const updateInventoryQuery = `
+        UPDATE items
+        SET quantity = quantity - ?
+        WHERE id = ? AND quantity >= ?
+      `;
+      const [updateResult] = await db.query(updateInventoryQuery, [quantity, item_id, quantity]);
   
-        db.query(updateInventoryQuery, [quantity, item], (err, result) => {
-          if (err) {
-            console.error("Error updating inventory table:", err);
-            return res.status(500).json({ success: false, message: "Database error." });
-          }
-  
-          res.json({ success: true, message: "Item issued successfully." });
-        });
+      if (updateResult.affectedRows === 0) {
+        return res.status(404).json({ success: false, message: "Item not found or insufficient quantity in inventory." });
       }
-    );
+  
+      res.json({ success: true, message: "Item issued successfully." });
+    } catch (err) {
+      console.error("Error issuing item:", err);
+      res.status(500).json({ success: false, message: "Database error." });
+    }
   });
+  
+  
+  
+  // issue table
   app.get("/issued_items", async (req, res) => {
     try {
         const [data] = await db.query("SELECT * FROM issued_items;");
@@ -281,6 +319,8 @@ app.put("/items/:id", async (req, res) => {
         res.status(500).json({ error: "Server error" });
     }
 });
+
+
 app.post("/purchases", async (req, res) => {
   const { item_name, supplier_id, purchase_date, quantity, unit_price } = req.body;
 
