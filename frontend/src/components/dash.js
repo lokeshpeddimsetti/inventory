@@ -8,6 +8,8 @@ import IssuedItemsTable from "./IssuedItems"; // Import IssuedItemsTable
 import AddItems from "./AddItems"; // Import AddItems
 import Purchases from "./Purchases"; // Import Purchases component
 import AddSupplier from "./AddSupplier"; // Import AddSupplier component
+import PurchasesList from "./PurchasesList";
+
 
 const items = [
   {
@@ -41,7 +43,7 @@ const Dash = () => {
   const [showAddItems, setShowAddItems] = useState(false); // State to toggle Add Items view
   const [showPurchases, setShowPurchases] = useState(false); // State to toggle Purchases view
   const [showAddSupplier, setShowAddSupplier] = useState(false); // State to toggle Add Supplier view
-
+  const [showPurchasesList, setShowPurchasesList] = useState(false); // State to toggle Purchases List view
   // Fetch items based on the selected category
   const fetchItems = async (category) => {
     setLoading(true);
@@ -110,6 +112,15 @@ const Dash = () => {
     setShowAddItems(false); // Hide Add Items view when Add Supplier is shown
     setShowPurchases(false); // Hide Purchases view when Add Supplier is shown
   };
+  // Show Purchases List page
+  const handleShowPurchasesList = () => {
+    setShowPurchasesList(true);
+    setShowAddUser(false); // Hide Add User view when Purchases List is shown
+    setShowIssuedItems(false); // Hide issued items view when Purchases List is shown
+    setShowAddItems(false); // Hide Add Items view when Purchases List is shown
+    setShowPurchases(false); // Hide Purchases view when Purchases List is shown
+    setShowAddSupplier(false); // Hide Add Supplier view when Purchases List is shown
+  };
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
@@ -177,6 +188,22 @@ const Dash = () => {
         >
           + Add Purchase
         </button>
+             
+        <button
+          style={{
+            marginTop: "10px",
+            width: "100%",
+            backgroundColor: "#ff5722",
+            color: "white",
+            border: "none",
+            padding: "10px",
+            cursor: "pointer",
+            borderRadius: "4px",
+          }}
+          onClick={handleShowPurchasesList}
+        >
+          Purchases List  
+        </button>
         <button
           style={{
             marginTop: "10px",
@@ -190,7 +217,7 @@ const Dash = () => {
           }}
           onClick={handleShowAddSupplier} // Show Add Supplier page
         >
-          + Add Supplier
+          Supplier
         </button>
       </div>
 
@@ -206,6 +233,7 @@ const Dash = () => {
           <AddItems /> // Render Add Items page
         ) : showPurchases ? (
           <Purchases setItemsData={setItemsData} /> // Render Purchases page
+        
         ) : showAddSupplier ? (
           <AddSupplier /> // Render Add Supplier page
         ) : selectedCategory && itemsData.length > 0 ? (

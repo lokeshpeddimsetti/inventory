@@ -1,122 +1,170 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { Table, Button, Modal, Input, message } from "antd";
 import axios from "axios";
 
-const AddSupplier = () => {
-    const [formData, setFormData] = useState({
-        supplier_id: "",
-        name: "",
-        contact: "",
-        address: "",
-        contact_person: "" // New field for contact person
-    });
+const Suppliers = () => {
+  const [suppliersData, setSuppliersData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [formData, setFormData] = useState({
+    supplier_id: "",
+    supplier_name: "",
+    contact_person: "",
+    phone: "",
+    address: "",
+  });
 
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        try {
-            const response = await axios.post("http://localhost:5000/addSupplier", formData);
-            alert(response.data.message);
-            setFormData({
-                supplier_id: "",
-                name: "",
-                contact: "",
-                address: "",
-                contact_person: "" // Reset the new field
-            }); // Reset form after successful submission
-        } catch (error) {
-            alert("Error adding supplier: " + (error.response?.data?.message || error.message));
-        }
-    };
-
-    return (
-        <div style={styles.container}>
-            <h2 style={styles.heading}>Add New Supplier</h2>
-            <form onSubmit={handleSubmit}>
-                <input
-                    type="text"
-                    name="supplier_id"
-                    placeholder="Supplier ID"
-                    value={formData.supplier_id}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                />
-                <input
-                    type="text"
-                    name="name"
-                    placeholder="Supplier Name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                />
-                <input
-                    type="text"
-                    name="contact"
-                    placeholder="Contact"
-                    value={formData.contact}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                />
-                <input
-                    type="text"
-                    name="address"
-                    placeholder="Address"
-                    value={formData.address}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                />
-                <input
-                    type="text"
-                    name="contact_person"
-                    placeholder="Contact Person" // New input field
-                    value={formData.contact_person}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                />
-                <button type="submit" style={styles.button}>
-                    Add Supplier
-                </button>
-            </form>
-        </div>
-    );
-};
-
-const styles = {
-    container: {
-        textAlign: "center",
-        padding: "20px",
-        maxWidth: "400px",
-        margin: "auto",
-        backgroundColor: "#f9f9f9",
-        borderRadius: "10px",
-        boxShadow: "0 4px 10px rgba(0,0,0,0.1)"
-    },
-    heading: { marginBottom: "20px", color: "#333" },
-    input: {
-        width: "100%",
-        padding: "10px",
-        margin: "10px 0",
-        borderRadius: "5px",
-        border: "1px solid #ccc",
-        fontSize: "16px"
-    },
-    button: {
-        width: "100%",
-        padding: "10px",
-        backgroundColor: "#007bff",
-        color: "white",
-        border: "none",
-        borderRadius: "5px",
-        cursor: "pointer",
-        fontSize: "16px"
+  // Fetch suppliers data
+  const fetchSuppliers = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get("http://localhost:5000/suppliers");
+      setSuppliersData(response.data);
+    } catch (error) {
+      console.error("Error fetching suppliers:", error);
+      message.error("Failed to fetch suppliers. Please try again later.");
     }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchSuppliers(); // Fetch suppliers when the component mounts
+  }, []);
+
+  // Handle form input changes
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // Handle form submission
+  const handleSubmit = async () => {
+    try {
+      // Clear any existing messages
+      message.destroy();
+
+      const response = await axios.post("http://localhost:5000/addSupplier", formData);
+      message.success("Supplier added successfully!"); // Show success alert
+      setFormData({
+        supplier_id: "",
+        supplier_name: "",
+        contact_person: "",
+        phone: "",
+        address: "",
+      }); // Reset form
+      setIsModalVisible(false); // Close modal
+      fetchSuppliers(); // Refresh suppliers table
+    } catch (error) {
+      // Clear any existing messages
+      message.destroy();
+
+      if (error.response?.status === 409) {
+        message.error("Error: Supplier ID already exists."); // Show alert for duplicate entry
+      } else {
+        console.error("Error adding supplier:", error.response?.data || error.message);
+        message.error("Error adding supplier: " + (error.response?.data?.message || error.message));
+      }
+    }
+  };
+
+  // Columns for the suppliers table
+  const suppliersColumns = [
+    {
+      title: "Supplier ID",
+      dataIndex: "supplier_id",
+      key: "supplier_id",
+    },
+    {
+      title: "Supplier Name",
+      dataIndex: "supplier_name",
+      key: "supplier_name",
+    },
+    {
+      title: "Contact Person",
+      dataIndex: "contact_person",
+      key: "contact_person",
+    },
+    {
+      title: "Phone",
+      dataIndex: "phone",
+      key: "phone",
+    },
+    {
+      title: "Address",
+      dataIndex: "address",
+      key: "address",
+    },
+  ];
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Suppliers</h2>
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        <Table
+          dataSource={suppliersData}
+          columns={suppliersColumns}
+          rowKey={(record) => record.supplier_id} // Assuming `supplier_id` is the unique key
+        />
+      )}
+      <Button
+        type="primary"
+        style={{ marginTop: 20 }}
+        onClick={() => setIsModalVisible(true)}
+      >
+        + Add Supplier
+      </Button>
+
+      {/* Add Supplier Modal */}
+      <Modal
+        title="Add Supplier"
+        visible={isModalVisible}
+        onCancel={() => setIsModalVisible(false)}
+        onOk={handleSubmit}
+        okText="Add"
+      >
+        <Input
+          type="text"
+          name="supplier_id"
+          placeholder="Supplier ID"
+          value={formData.supplier_id}
+          onChange={handleChange}
+          style={{ marginBottom: 10 }}
+        />
+        <Input
+          type="text"
+          name="supplier_name"
+          placeholder="Supplier Name"
+          value={formData.supplier_name}
+          onChange={handleChange}
+          style={{ marginBottom: 10 }}
+        />
+        <Input
+          type="text"
+          name="contact_person"
+          placeholder="Contact Person"
+          value={formData.contact_person}
+          onChange={handleChange}
+          style={{ marginBottom: 10 }}
+        />
+        <Input
+          type="text"
+          name="phone"
+          placeholder="Phone"
+          value={formData.phone}
+          onChange={handleChange}
+          style={{ marginBottom: 10 }}
+        />
+        <Input.TextArea
+          name="address"
+          placeholder="Address"
+          value={formData.address}
+          onChange={handleChange}
+          style={{ marginBottom: 10 }}
+        />
+      </Modal>
+    </div>
+  );
 };
 
-export default AddSupplier;
+export default Suppliers;

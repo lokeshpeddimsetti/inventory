@@ -21,7 +21,6 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // ✅ Login Route
-// ✅ Login Route
 app.post("/login", async (req, res) => {
     try {
       const { email, password, role } = req.body;
@@ -250,6 +249,7 @@ app.put("/items/:id", async (req, res) => {
   
     console.log("Request Body:", req.body);
   
+    // Validate input
     if (
       !item_id ||
       !item ||
@@ -263,7 +263,7 @@ app.put("/items/:id", async (req, res) => {
       !domain ||
       !category_name
     ) {
-      return res.status(400).json({ success: false, message: "Invalid data provided." });
+      return res.status(400).json({ success: false, message: "All fields are required." });
     }
   
     try {
@@ -274,6 +274,7 @@ app.put("/items/:id", async (req, res) => {
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
+      console.log("Insert Query:", insertIssuedItemQuery);
       await db.query(insertIssuedItemQuery, [
         item_id,
         item,
@@ -320,58 +321,156 @@ app.put("/items/:id", async (req, res) => {
     }
 });
 
+app.post("/issue", async (req, res) => {
+  const {
+    item_id,
+    item,
+    quantity,
+    issued_by,
+    issue_date,
+    issued_to,
+    brand,
+    units,
+    unit_price,
+    domain,
+    category_name,
+  } = req.body;
 
-app.post("/purchases", async (req, res) => {
-  const { item_name, supplier_id, purchase_date, quantity, unit_price } = req.body;
-
-  if (!item_name || !supplier_id || !purchase_date || !quantity || !unit_price) {
-    return res.status(400).json({ success: false, message: "Invalid data provided." });
+  // Validate input
+  if (
+    !item_id ||
+    !item ||
+    !quantity ||
+    !issued_by ||
+    !issue_date ||
+    !issued_to ||
+    !brand ||
+    !units ||
+    !unit_price ||
+    !domain ||
+    !category_name
+  ) {
+    return res.status(400).json({ success: false, message: "All fields are required." });
   }
 
-  const total_cost = quantity * unit_price;
-
   try {
-    // Insert the purchase into the purchases table
-    const insertPurchaseQuery = `
-      INSERT INTO purchases (item_name, supplier_id, purchase_date, quantity, unit_price, total_cost)
-      VALUES (?, ?, ?, ?, ?, ?)
+    // Insert into the issue table
+    const insertQuery = `
+      INSERT INTO issue (
+        item_id, item, quantity, issued_by, issue_date, issued_to, brand, units, unit_price, domain, category_name
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
-    await db.query(insertPurchaseQuery, [
-      item_name,
-      supplier_id,
-      purchase_date,
+    await db.query(insertQuery, [
+      item_id,
+      item,
       quantity,
+      issued_by,
+      issue_date,
+      issued_to,
+      brand,
+      units,
       unit_price,
-      total_cost,
+      domain,
+      category_name,
     ]);
 
-    // Check if an item with the same name and unit price exists in the items table
-    const checkItemQuery = `
-      SELECT * FROM items WHERE name = ? AND unit_price = ?
-    `;
-    const [existingItem] = await db.query(checkItemQuery, [item_name, unit_price]);
+    res.json({ success: true, message: "Item issued successfully." });
+  } catch (error) {
+    console.error("Error issuing item:", error);
+    res.status(500).json({ success: false, message: "Database error." });
+  }
+});
 
-    if (existingItem.length > 0) {
-      // If the item with the same unit price exists, update its quantity
-      const updateItemsQuery = `
-        UPDATE items
-        SET quantity = quantity + ?
-        WHERE name = ? AND unit_price = ?
-      `;
-      await db.query(updateItemsQuery, [quantity, item_name, unit_price]);
-    } else {
-      // If the item with the same unit price does not exist, insert a new row
-      const insertNewItemQuery = `
-        INSERT INTO items (name, quantity, unit_price)
-        VALUES (?, ?, ?)
-      `;
-      await db.query(insertNewItemQuery, [item_name, quantity, unit_price]);
+app.post("/purchases", async (req, res) => {
+  const { supplier_id, purchase_date, invoice, items } = req.body;
+
+  if (!items || items.length === 0) {
+    return res.status(400).json({ success: false, message: "Cart is empty" });
+  }
+
+  try {
+    // Generate a unique bill number
+    const [billResult] = await db.query("SELECT MAX(bill_no) AS lastBill FROM bill");
+    const bill_no = billResult[0].lastBill ? billResult[0].lastBill + 1 : 1000;
+
+    // Insert a new record into the bill table
+    await db.query(
+      "INSERT INTO bill (bill_no, invoice, purchase_date, supplier_id, created_at) VALUES (?, ?, ?, ?, NOW())",
+      [bill_no, invoice, purchase_date, supplier_id]
+    );
+
+    // Process each item in the cart
+    for (const item of items) {
+      const { item_name, quantity, unit_price, brand, units, description, domain, category_name } = item;
+      const total_cost = quantity * unit_price;
+
+      // Check if the item already exists in the items table with the same item_name, brand, supplier_id, and domain
+      const [existingItem] = await db.query(
+        "SELECT id, quantity FROM items WHERE item_name = ? AND brand = ? AND supplier_id = ? AND domain = ?",
+        [item_name, brand, supplier_id, domain]
+      );
+
+      if (existingItem.length > 0) {
+        // If the item exists, update its quantity
+        await db.query(
+          "UPDATE items SET quantity = quantity + ? WHERE id = ?",
+          [quantity, existingItem[0].id]
+        );
+      } else {
+        // If the item doesn't exist, insert it into the items table
+        await db.query(
+          "INSERT INTO items (name, brand, quantity, units, unit_price, description, domain, category_name, supplier_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [item_name, brand, quantity, units, unit_price, description, domain, category_name, supplier_id]
+        );
+      }
+
+      // Insert the item into the purchases table
+      await db.query(
+        "INSERT INTO purchases (item_name, quantity, unit_price, total_cost, bill_no, brand, units, description, domain, category_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [item_name, quantity, unit_price, total_cost, bill_no, brand, units, description, domain, category_name]
+      );
     }
 
-    res.json({ success: true, message: "Purchase added and items table updated successfully." });
+    res.json({ success: true, bill_no });
+  } catch (error) {
+    console.error("Error adding purchase:", error);
+    res.status(500).json({ success: false, message: "Database error." });
+  }
+});
+// ✅ Get Purchases
+app.get("/purchases", async (req, res) => {
+  const { purchase_date, supplier_id } = req.query;
+
+  try {
+    let query = `
+      SELECT 
+        p.purchase_id,
+        p.item_name,
+        p.quantity,
+        p.unit_price,
+        p.total_cost,
+        p.bill_no,
+        p.brand,
+        p.units,
+        p.description,
+        p.domain,
+        p.category_name,
+        b.invoice,
+        b.purchase_date,
+        b.supplier_id
+      FROM purchases p
+      JOIN bill b ON p.bill_no = b.bill_no
+      WHERE 1=1
+    `;
+    const params = [];
+
+    
+    const [data] = await db.query(query, params);
+    res.json(data);
   } catch (err) {
-    console.error("Error processing purchase:", err);
-    res.status(500).json({ success: false, message: "Server error." });
+    console.error("Error fetching purchases:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 app.get("/suppliers", async (req, res) => {
@@ -388,22 +487,31 @@ app.get("/suppliers", async (req, res) => {
 app.post("/addSupplier", async (req, res) => {
   const { supplier_id, supplier_name, contact_person, phone, address } = req.body;
 
+  console.log("Request Body:", req.body); // Log the incoming request body
+
   // Validate input
   if (!supplier_id || !supplier_name || !contact_person || !phone || !address) {
+    console.error("Validation failed. Missing required fields.");
     return res.status(400).json({ success: false, message: "All fields are required." });
   }
 
   try {
-    // Insert the new supplier into the suppliers table
     const insertSupplierQuery = `
       INSERT INTO suppliers (supplier_id, supplier_name, contact_person, phone, address)
       VALUES (?, ?, ?, ?, ?)
     `;
+    console.log("Executing query:", insertSupplierQuery);
+    console.log("With values:", [supplier_id, supplier_name, contact_person, phone, address]);
+
     await db.query(insertSupplierQuery, [supplier_id, supplier_name, contact_person, phone, address]);
     res.json({ success: true, message: "Supplier added successfully." });
   } catch (err) {
-    console.error("Error adding supplier:", err);
-    res.status(500).json({ success: false, message: "Failed to add supplier." });
+    if (err.code === "ER_DUP_ENTRY") {
+      console.error("Duplicate entry error:", err);
+      return res.status(409).json({ success: false, message: "Supplier ID already exists." });
+    }
+    console.error("Error adding supplier:", err); // Log the error
+    res.status(500).json({ success: false, message: "Database error.", error: err.message });
   }
 });
 // ✅ Start Server

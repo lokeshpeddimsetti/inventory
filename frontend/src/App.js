@@ -8,7 +8,9 @@ import InventoryDashboard from "./components/InventoryDashboard";
 import ManagerDashboard from "./components/ManagerDashboard";
 import AddUser from "./components/AddUser";
 import ContentSection from "./components/ContentSection";
-import IssuedItems from "./components/IssuedItems";
+import IssuedItems from "./components/IssuedItems"
+import PurchasesList from "./components/PurchasesList";
+
 
 function App() {
     return (
@@ -23,6 +25,7 @@ function App() {
                 <Route path="/add-user" element={<AddUser />} />
                 <Route path="/content" element={<ContentSection />} />
                 <Route path="/issueditems" element={<IssuedItems />} />
+                <Route path="/purchases" element={<PurchasesList />} />
             </Routes>
         </Router>
     );

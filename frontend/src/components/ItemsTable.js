@@ -11,6 +11,16 @@ const ItemsTable = ({ itemsData, setItemsData }) => {
   const [editingRow, setEditingRow] = useState(null); // Track the row being edited
   const [updatedRow, setUpdatedRow] = useState({}); // Track the updated row data
 
+  const fetchItems = async () => {
+    try {
+      const response = await axios.get("http://localhost:5000/items");
+      setItemsData(response.data);
+    } catch (error) {
+      console.error("Error fetching items:", error);
+      message.error("Failed to fetch items. Please try again later.");
+    }
+  };
+
   // Handle Issue button click
   const handleIssue = (item) => {
     setModalData(item); // Set the item data for the modal
@@ -32,20 +42,10 @@ const ItemsTable = ({ itemsData, setItemsData }) => {
       return;
     }
   
-    if (!issuedTo.trim()) {
-      message.error("Please specify the person to whom the item is issued.");
-      return;
-    }
-  
-    if (!issuedBy.trim()) {
-      message.error("Please specify the issuer name.");
-      return;
-    }
-  
     const payload = {
-      item_id: modalData.id, // Use the item ID
-      item: modalData.name, // Item name
-      quantity: issueQuantity, // Quantity to issue
+      item_id: modalData.id,
+      item: modalData.name,
+      quantity: issueQuantity,
       issued_by: issuedBy,
       issue_date: new Date().toISOString().split("T")[0],
       issued_to: issuedTo,
@@ -55,26 +55,13 @@ const ItemsTable = ({ itemsData, setItemsData }) => {
       domain: modalData.domain,
       category_name: modalData.category_name,
     };
-    console.log("Payload being sent to backend:", payload);
   
     try {
       const response = await axios.post("http://localhost:5000/issue", payload);
   
       if (response.data.success) {
         message.success("Item issued successfully!");
-  
-        // Show an alert box after successful issuance
-        alert(`Item "${modalData.name}" has been issued successfully to "${issuedTo}".`);
-  
-        // Update the quantity in the itemsData state
-        setItemsData((prev) =>
-          prev.map((item) =>
-            item.id === modalData.id
-              ? { ...item, quantity: item.quantity - issueQuantity }
-              : item
-          )
-        );
-  
+        fetchItems(); // Refresh the items table
         setIsModalVisible(false); // Close the modal
       } else {
         message.error(response.data.message || "Failed to issue item. Please try again.");
