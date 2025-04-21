@@ -11,16 +11,23 @@ const ItemsTable = ({ itemsData, setItemsData }) => {
   const [editingRow, setEditingRow] = useState(null); // Track the row being edited
   const [updatedRow, setUpdatedRow] = useState({}); // Track the updated row data
 
-  const fetchItems = async () => {
+  const fetchItems = async (category) => {
     try {
+      console.log("Selected category:", category); // Debugging log
       const response = await axios.get("http://localhost:5000/items");
-      setItemsData(response.data);
+      console.log("Fetched items:", response.data); // Debugging log
+      // Filter items based on the selected category (case-insensitive)
+      const filteredItems = response.data.filter(
+        (item) => item.category_name === category
+      );
+      setItemsData(filteredItems);
+      console.log("Filtered items:", filteredItems); // Debugging log
     } catch (error) {
       console.error("Error fetching items:", error);
       message.error("Failed to fetch items. Please try again later.");
     }
   };
-
+  
   // Handle Issue button click
   const handleIssue = (item) => {
     setModalData(item); // Set the item data for the modal
@@ -133,7 +140,12 @@ const ItemsTable = ({ itemsData, setItemsData }) => {
         </thead>
         <tbody>
           {itemsData.map((item) => (
-            <tr key={item.id}>
+            <tr
+              key={item.id}
+              style={{
+                backgroundColor: item.quantity < 5 ? "#ffcccc" : "transparent", // Red background for low quantity
+              }}
+            >
               {editingRow === item.id ? (
                 <>
                   <td style={{ border: "1px solid #ddd", padding: 8 }}>{item.id}</td>
@@ -229,19 +241,20 @@ const ItemsTable = ({ itemsData, setItemsData }) => {
                   <td style={{ border: "1px solid #ddd", padding: 8 }}>{item.description}</td>
                   <td style={{ border: "1px solid #ddd", padding: 8 }}>{item.domain || "N/A"}</td>
                   <td style={{ border: "1px solid #ddd", padding: 8, textAlign: "center" }}>
-                    <Button
-                      type="primary"
-                      onClick={() => handleModify(item)} // Trigger handleModify with the item
-                      style={{ marginRight: 8 }}
-                    >
-                      Modify
-                    </Button>
-                    <Button
-                      type="default"
-                      onClick={() => handleIssue(item)} // Trigger handleIssue with the item
-                    >
-                      Issue
-                    </Button>
+                    <div style={{ display: "flex", justifyContent: "center", gap: "8px" }}>
+                      <Button
+                        type="primary"
+                        onClick={() => handleModify(item)} // Trigger handleModify with the item
+                      >
+                        Modify
+                      </Button>
+                      <Button
+                        type="default"
+                        onClick={() => handleIssue(item)} // Trigger handleIssue with the item
+                      >
+                        Issue
+                      </Button>
+                    </div>
                   </td>
                 </>
               )}

@@ -10,6 +10,11 @@ import AddUser from "./components/AddUser";
 import ContentSection from "./components/ContentSection";
 import IssuedItems from "./components/IssuedItems"
 import PurchasesList from "./components/PurchasesList";
+import Users from "./components/Users";
+import Home from "./components/Home";
+import Profile from "./components/Profile";
+import Purchases from "./components/Purchases"; 
+import Staffdash from "./components/staff/staffdash";
 
 
 function App() {
@@ -25,7 +30,13 @@ function App() {
                 <Route path="/add-user" element={<AddUser />} />
                 <Route path="/content" element={<ContentSection />} />
                 <Route path="/issueditems" element={<IssuedItems />} />
-                <Route path="/purchases" element={<PurchasesList />} />
+                <Route path="/purchasesList" element={<PurchasesList />} />
+                <Route path="/users" element={<Users />} /> 
+                <Route path="/home" element={<Home />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/purchases" element={<Purchases />} />
+                <Route path="/staffdash" element={<Staffdash />} />
+                
             </Routes>
         </Router>
     );

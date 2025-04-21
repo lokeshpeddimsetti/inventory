@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const mysql = require("mysql2");
+const bcrypt = require("bcrypt");
 
 const app = express();
 const PORT = 5000;
@@ -127,14 +128,14 @@ app.get("/items", async (req, res) => {
 
 // ✅ Get Items by Category (Dynamically Fetch Data)
 app.get("/items/:category", async (req, res) => {
-    try {
-        const { category } = req.params;
-        const [data] = await db.query("SELECT * FROM items WHERE category_name = ?", [category]);
-        res.json(data);
-    } catch (err) {
-        console.error("Error fetching items by category:", err);
-        res.status(500).json({ error: "Server error" });
-    }
+  try {
+    const { category } = req.params;
+    const [data] = await db.query("SELECT * FROM items WHERE category_name = ?", [category]);
+    res.json(data);
+  } catch (err) {
+    console.error("Error fetching items by category:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // ✅ Update Item
@@ -182,7 +183,6 @@ app.put("/items/:id", async (req, res) => {
     }
   });
   // POST route to add a new user
-  const bcrypt = require("bcrypt");
 
   // POST route to add a new user
   app.post("/users", async (req, res) => {
@@ -267,6 +267,17 @@ app.put("/items/:id", async (req, res) => {
     }
   
     try {
+      // Fetch the current quantity for debugging
+      const [currentItem] = await db.query("SELECT quantity FROM items WHERE id = ?", [item_id]);
+      if (currentItem.length === 0) {
+        return res.status(404).json({ success: false, message: "Item not found in the database." });
+      }
+      console.log("Current Quantity in Database:", currentItem[0].quantity);
+  
+      if (currentItem[0].quantity < quantity) {
+        return res.status(400).json({ success: false, message: "Insufficient quantity in inventory." });
+      }
+  
       // Insert into issued_items table
       const insertIssuedItemQuery = `
         INSERT INTO issued_items (
@@ -274,7 +285,6 @@ app.put("/items/:id", async (req, res) => {
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
-      console.log("Insert Query:", insertIssuedItemQuery);
       await db.query(insertIssuedItemQuery, [
         item_id,
         item,
@@ -295,8 +305,10 @@ app.put("/items/:id", async (req, res) => {
         SET quantity = quantity - ?
         WHERE id = ? AND quantity >= ?
       `;
-      const [updateResult] = await db.query(updateInventoryQuery, [quantity, item_id, quantity]);
+      console.log("Update Query:", updateInventoryQuery);
+      console.log("Query Parameters:", [quantity, item_id, quantity]);
   
+      const [updateResult] = await db.query(updateInventoryQuery, [quantity, item_id, quantity]);
       if (updateResult.affectedRows === 0) {
         return res.status(404).json({ success: false, message: "Item not found or insufficient quantity in inventory." });
       }
@@ -321,69 +333,9 @@ app.put("/items/:id", async (req, res) => {
     }
 });
 
-app.post("/issue", async (req, res) => {
-  const {
-    item_id,
-    item,
-    quantity,
-    issued_by,
-    issue_date,
-    issued_to,
-    brand,
-    units,
-    unit_price,
-    domain,
-    category_name,
-  } = req.body;
-
-  // Validate input
-  if (
-    !item_id ||
-    !item ||
-    !quantity ||
-    !issued_by ||
-    !issue_date ||
-    !issued_to ||
-    !brand ||
-    !units ||
-    !unit_price ||
-    !domain ||
-    !category_name
-  ) {
-    return res.status(400).json({ success: false, message: "All fields are required." });
-  }
-
-  try {
-    // Insert into the issue table
-    const insertQuery = `
-      INSERT INTO issue (
-        item_id, item, quantity, issued_by, issue_date, issued_to, brand, units, unit_price, domain, category_name
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    await db.query(insertQuery, [
-      item_id,
-      item,
-      quantity,
-      issued_by,
-      issue_date,
-      issued_to,
-      brand,
-      units,
-      unit_price,
-      domain,
-      category_name,
-    ]);
-
-    res.json({ success: true, message: "Item issued successfully." });
-  } catch (error) {
-    console.error("Error issuing item:", error);
-    res.status(500).json({ success: false, message: "Database error." });
-  }
-});
-
 app.post("/purchases", async (req, res) => {
   const { supplier_id, purchase_date, invoice, items } = req.body;
+  console.log("Request Body:", req.body); // Debugging log
 
   if (!items || items.length === 0) {
     return res.status(400).json({ success: false, message: "Cart is empty" });
@@ -407,7 +359,7 @@ app.post("/purchases", async (req, res) => {
 
       // Check if the item already exists in the items table with the same item_name, brand, supplier_id, and domain
       const [existingItem] = await db.query(
-        "SELECT id, quantity FROM items WHERE item_name = ? AND brand = ? AND supplier_id = ? AND domain = ?",
+        "SELECT id, quantity FROM items WHERE name = ? AND brand = ? AND supplier_id = ? AND domain = ?",
         [item_name, brand, supplier_id, domain]
       );
 
@@ -439,40 +391,79 @@ app.post("/purchases", async (req, res) => {
   }
 });
 // ✅ Get Purchases
-app.get("/purchases", async (req, res) => {
-  const { purchase_date, supplier_id } = req.query;
+app.get("/purchaselist", async (req, res) => {
+  const { date_from, date_to, supplier_id, domain, category_name, item_name, bill_no } = req.query;
+
+  let query = `
+    SELECT 
+      p.purchase_id,
+      p.item_name,
+      p.quantity,
+      p.unit_price,
+      p.total_cost,
+      b.bill_no, -- Ensure bill_no is selected from the bill table
+      p.brand,
+      p.units,
+      p.description,
+      p.domain,
+      p.category_name,
+      b.invoice,
+      b.purchase_date,
+      b.supplier_id
+    FROM purchases p
+    JOIN bill b ON p.bill_no = b.bill_no
+    WHERE 1=1
+  `;
+  console.log("Query:", query); // Debugging log
+
+  const params = [];
+
+  if (date_from) {
+    query += ` AND DATE(b.purchase_date) >= ?`;
+    params.push(date_from);
+  }
+  if (date_to) {
+    query += ` AND DATE(b.purchase_date) <= ?`;
+    params.push(date_to);
+  }
+  if (supplier_id) {
+    query += ` AND b.supplier_id = ?`;
+    params.push(supplier_id);
+  }
+  if (domain) {
+    query += ` AND p.domain = ?`;
+    params.push(domain);
+  }
+  if (category_name) {
+    query += ` AND p.category_name LIKE ?`;
+    params.push(`%${category_name}%`);
+  }
+  if (item_name) {
+    query += ` AND p.item_name LIKE ?`;
+    params.push(`%${item_name}%`);
+  }
+  if (bill_no) {
+    query += ` AND b.bill_no LIKE ?`; // Apply the filter to the bill table
+    params.push(`%${bill_no}%`);
+    console.log("Bill No Filter:", bill_no); // Debugging log
+  }
 
   try {
-    let query = `
-      SELECT 
-        p.purchase_id,
-        p.item_name,
-        p.quantity,
-        p.unit_price,
-        p.total_cost,
-        p.bill_no,
-        p.brand,
-        p.units,
-        p.description,
-        p.domain,
-        p.category_name,
-        b.invoice,
-        b.purchase_date,
-        b.supplier_id
-      FROM purchases p
-      JOIN bill b ON p.bill_no = b.bill_no
-      WHERE 1=1
-    `;
-    const params = [];
-
-    
     const [data] = await db.query(query, params);
+    console.log("Query Results:", data); // Debugging log 
+    console.log("Invoice Data:", data.map(row => row.invoice));
+    data.forEach((row) => {
+      if (row.invoice) {
+        row.invoice = row.invoice.toString("base64");
+      }
+    });
     res.json(data);
   } catch (err) {
     console.error("Error fetching purchases:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 app.get("/suppliers", async (req, res) => {
   try {
     // Fetch all suppliers from the database
@@ -514,6 +505,111 @@ app.post("/addSupplier", async (req, res) => {
     res.status(500).json({ success: false, message: "Database error.", error: err.message });
   }
 });
+
+app.get("/users", async (req, res) => {
+  try {
+    console.log("Fetching users from the database..."); // Debugging log
+    const [users] = await db.query("SELECT user_id, username, email, role FROM users");
+    console.log("Fetched users:", users); // Debugging log
+    res.json(users);
+  } catch (error) {
+    console.error("Error fetching users:", error); // Log the error
+    res.status(500).json({ error: "Failed to fetch users." });
+  }
+});
+// ✅ Get User Details by ID
+app.get("/user/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Fetch user details excluding the password_hash
+    const [user] = await db.query(
+      "SELECT user_id, username, email, phone, role, created_at,password_hash FROM users WHERE user_id = ?",
+      [id]
+    );
+
+    if (user.length === 0) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.json({ success: true, user: user[0] });
+  } catch (error) {
+    console.error("Error fetching user details:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+app.post("/login", async (req, res) => {
+  try {
+    const { email, password, role } = req.body;
+
+    // Validate input
+    if (!email || !password || !role) {
+      return res.status(400).json({ success: false, message: "All fields are required" });
+    }
+
+    // Fetch user from the database
+    const sql = `SELECT * FROM users WHERE email = ? AND role = ?`;
+    const [data] = await db.query(sql, [email, role]);
+
+    if (data.length === 0) {
+      return res.status(401).json({ success: false, message: "Invalid credentials" });
+    }
+
+    const user = data[0];
+
+    // Compare the entered password with the hashed password
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    if (!isPasswordValid) {
+      return res.status(401).json({ success: false, message: "Invalid credentials" });
+    }
+
+    // If password is valid, return success response with user details
+    res.json({
+      success: true,
+      user: {
+        id: user.user_id,
+        username: user.username,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    console.error("Error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// ✅ Update User Password
+app.put("/user/:id", async (req, res) => {
+  const { id } = req.params;
+  const { currentPassword, newPassword } = req.body;
+
+  try {
+    // Fetch the user's current hashed password from the database
+    const [user] = await db.query("SELECT password_hash FROM users WHERE user_id = ?", [id]);
+    console.log("Fetched user:", user); // Debugging log
+    if (user.length === 0) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Compare the current password with the hashed password in the database
+    const isMatch = await bcrypt.compare(currentPassword, user[0].password_hash);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, message: "Current password is incorrect" });
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update the password in the database
+    await db.query("UPDATE users SET password_hash = ? WHERE user_id = ?", [hashedPassword, id]);
+
+    res.json({ success: true, message: "Password updated successfully" });
+  } catch (error) {
+    console.error("Error updating password:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 // ✅ Start Server
 app.listen(PORT, () => {
     console.log(`✅ Server is running on http://localhost:${PORT}`);

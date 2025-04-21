@@ -17,13 +17,15 @@ const Login = () => {
             );
 
             if (response.data.success) {
+                localStorage.setItem("user_id", response.data.user.id); // Store user_id
+            localStorage.setItem("login_time", new Date().toISOString()); // Store login time
                 alert(`Hello ${role.toUpperCase()}, successfully logged in!`);
 
                 // ✅ Redirect based on role
                 if (role === "Admin" || role === "Manager") {
                     navigate("/dash");
                 } else if (role === "Staff") {
-                    navigate("/facultyDashboard");
+                    navigate("/staffdash"); // Redirect to Staff Dashboard
                 }
             } else {
                 alert(response.data.message || "Invalid credentials");

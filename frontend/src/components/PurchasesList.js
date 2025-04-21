@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Table, DatePicker, Input, Button, Spin, message } from "antd";
+import { Table, DatePicker, Button, Spin, message, AutoComplete, Input } from "antd";
+import { UserOutlined } from "@ant-design/icons";
 import axios from "axios";
 
 const { RangePicker } = DatePicker;
@@ -7,7 +8,14 @@ const { RangePicker } = DatePicker;
 const PurchasesList = () => {
   const [purchases, setPurchases] = useState([]); // Store purchases data
   const [loading, setLoading] = useState(false); // Loading state
-  const [filters, setFilters] = useState({ purchase_date: null, supplier_id: "" }); // Filters
+  const [filters, setFilters] = useState({
+    date_from: null,
+    date_to: null,
+    supplier_id: null, // Supplier ID filter
+    bill_no: null, // Bill Number filter
+  });
+  const [billOptions, setBillOptions] = useState([]); // Options for Bill Number AutoComplete
+  const [supplierOptions, setSupplierOptions] = useState([]); // Options for Supplier ID AutoComplete
 
   // Fetch purchases from the backend
   const fetchPurchases = async (applyFilters = false) => {
@@ -15,16 +23,22 @@ const PurchasesList = () => {
     try {
       const params = {};
       if (applyFilters) {
-        if (filters.purchase_date) {
-          params.purchase_date = filters.purchase_date.format("YYYY-MM-DD");
+        if (filters.date_from) {
+          params.date_from = filters.date_from.format("YYYY-MM-DD");
+        }
+        if (filters.date_to) {
+          params.date_to = filters.date_to.format("YYYY-MM-DD");
         }
         if (filters.supplier_id) {
           params.supplier_id = filters.supplier_id;
         }
+        if (filters.bill_no) {
+          params.bill_no = filters.bill_no;
+        }
       }
 
       console.log("Fetching purchases with params:", params); // Debugging log
-      const response = await axios.get("http://localhost:5000/purchases", { params });
+      const response = await axios.get("http://localhost:5000/purchaselist", { params });
       console.log("Response data:", response.data); // Debugging log
       setPurchases(response.data);
     } catch (error) {
@@ -36,17 +50,55 @@ const PurchasesList = () => {
 
   // Fetch all purchases on component mount
   useEffect(() => {
+    console.log("PurchasesList component mounted"); // Debugging log
     fetchPurchases(); // Fetch all purchases by default
+  }, []);
+
+  // Fetch bill numbers for AutoComplete
+  useEffect(() => {
+    const fetchBillNumbers = async () => {
+      try {
+        const response = await axios.get("http://localhost:5000/bills"); // Replace with your bill endpoint
+        const options = response.data.map((bill) => ({
+          value: bill.bill_no.toString(),
+          label: `Bill No: ${bill.bill_no}`,
+        }));
+        setBillOptions(options);
+      } catch (error) {
+        console.error("Error fetching bill numbers:", error);
+        message.error("Failed to fetch bill numbers. Please try again later.");
+      }
+    };
+
+    fetchBillNumbers();
+  }, []);
+
+  // Fetch supplier options for AutoComplete
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        const response = await axios.get("http://localhost:5000/suppliers"); // Replace with your supplier endpoint
+        const options = response.data.map((supplier) => ({
+          value: supplier.supplier_id.toString(),
+          label: `${supplier.supplier_id} - ${supplier.supplier_name}`,
+        }));
+        setSupplierOptions(options);
+      } catch (error) {
+        console.error("Error fetching suppliers:", error);
+        message.error("Failed to fetch suppliers. Please try again later.");
+      }
+    };
+
+    fetchSuppliers();
   }, []);
 
   // Handle filter changes
   const handleFilterChange = (field, value) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
-  };
-
-  // Handle filter submission
-  const handleFilterSubmit = () => {
-    fetchPurchases(true); // Apply filters
+    setFilters((prev) => {
+      const updatedFilters = { ...prev, [field]: value };
+      console.log("Updated filters:", updatedFilters); // Debugging log
+      return updatedFilters;
+    });
   };
 
   // Columns for the purchases table
@@ -57,12 +109,17 @@ const PurchasesList = () => {
     { title: "Unit Price", dataIndex: "unit_price", key: "unit_price" },
     { title: "Total Cost", dataIndex: "total_cost", key: "total_cost" },
     { title: "Bill Number", dataIndex: "bill_no", key: "bill_no" },
-    { title: "Brand", dataIndex: "brand", key: "brand" },
-    { title: "Units", dataIndex: "units", key: "units" },
-    { title: "Domain", dataIndex: "domain", key: "domain" },
-    { title: "Category", dataIndex: "category_name", key: "category_name" },
+    { title: "Brand", dataIndex: "brand", key: "brand", render: (text) => text || "N/A" },
+    { title: "Units", dataIndex: "units", key: "units", render: (text) => text || "N/A" },
+    { title: "Domain", dataIndex: "domain", key: "domain", render: (text) => text || "N/A" },
+    { title: "Category", dataIndex: "category_name", key: "category_name", render: (text) => text || "N/A" },
     { title: "Supplier ID", dataIndex: "supplier_id", key: "supplier_id" },
-    { title: "Purchase Date", dataIndex: "purchase_date", key: "purchase_date" },
+    {
+      title: "Purchase Date",
+      dataIndex: "purchase_date",
+      key: "purchase_date",
+      render: (date) => new Date(date).toLocaleDateString(), // Format the date
+    },
     {
       title: "Invoice",
       key: "invoice",
@@ -70,9 +127,14 @@ const PurchasesList = () => {
         <Button
           type="link"
           onClick={() => {
-            const blob = new Blob([record.invoice], { type: "application/pdf" });
-            const url = URL.createObjectURL(blob);
-            window.open(url, "_blank");
+            console.log("Record:", record);
+            if (record.invoice) {
+              const blob = new Blob([Uint8Array.from(atob(record.invoice), (c) => c.charCodeAt(0))], { type: "application/pdf" });
+              const url = URL.createObjectURL(blob);
+              window.open(url, "_blank");
+            } else {
+              message.warning("No invoice available for this purchase.");
+            }
           }}
         >
           View Invoice
@@ -86,17 +148,39 @@ const PurchasesList = () => {
       <h2>Purchases</h2>
 
       {/* Filters */}
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 20, display: "flex", gap: "10px", alignItems: "center" }}>
+        {/* Date Range Filter */}
         <RangePicker
-          onChange={(dates) => handleFilterChange("purchase_date", dates ? dates[0] : null)}
+          onChange={(dates) => {
+            handleFilterChange("date_from", dates ? dates[0] : null);
+            handleFilterChange("date_to", dates ? dates[1] : null);
+          }}
           style={{ marginRight: 10 }}
         />
-        <Input
-          placeholder="Enter Supplier ID"
-          onChange={(e) => handleFilterChange("supplier_id", e.target.value)}
-          style={{ width: 200, marginRight: 10 }}
-        />
-        <Button type="primary" onClick={handleFilterSubmit}>
+
+        {/* Supplier ID Filter */}
+        <AutoComplete
+          options={supplierOptions}
+          style={{ width: 250 }}
+          placeholder="Filter by Supplier ID"
+          onChange={(value) => handleFilterChange("supplier_id", value)}
+          allowClear
+        >
+          <Input prefix={<UserOutlined />} />
+        </AutoComplete>
+
+        {/* Bill Number Filter */}
+        <AutoComplete
+          options={billOptions}
+          style={{ width: 250 }}
+          placeholder="Filter by Bill Number"
+          onChange={(value) => handleFilterChange("bill_no", value)}
+          allowClear
+        >
+          <Input prefix={<UserOutlined />} />
+        </AutoComplete>
+
+        <Button type="primary" onClick={() => fetchPurchases(true)}>
           Apply Filters
         </Button>
       </div>
